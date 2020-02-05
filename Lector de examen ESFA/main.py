@@ -5,6 +5,8 @@ Created on 2 sept. 2019
 para  sugerencias y contacto:   porchietto@gmail.com
                                 +543516769632
 '''
+Debug_level = 0
+
 import numpy as np
 import cv2
 from pyzbar.pyzbar import decode
@@ -12,7 +14,7 @@ from os import scandir, getcwd
 import argparse
 
 parser = argparse.ArgumentParser(description='Corrector automatico de Examenes')
-parser.add_argument("--ruta", default='C:\CABO\Serie 0', help="Ruta al direcctirio que contiene la imagenes")
+parser.add_argument("--ruta", default='C:\CABO\Serie 1', help="Ruta al direcctirio que contiene la imagenes")
 parser.add_argument("--url", default='127.0.0.1/index.php', help="url donde se envia la informacion")
 
 args = parser.parse_args()
@@ -54,10 +56,15 @@ for img_archivo in img_archivos:
         'examen': img_archivo,
              }
     # find the barcodes in the image and decode each of the barcodes
-    try : 
+    try :
+        decode.__init__() 
         decodedObjects = decode(img)
     except :
         print('error decodificando codigo de barra')
+    if decodedObjects.__len__() == 0: 
+        print('No se decto codigo')
+        continue
+    
     for obj in decodedObjects:
         #print('Type : ', obj.type)
         #print('Data : ', obj.data,'\n')
@@ -84,7 +91,7 @@ for img_archivo in img_archivos:
     img_thresh = cv2.adaptiveThreshold(img_gauss,255,1,1,11,2)
     
     area_grilla = img.size*materias/17.19
-    offset_area = 0.1
+    offset_area = 0.15
     #print('arrea grilla:',area_grilla)
     
     #deteccion por contornos
@@ -93,9 +100,9 @@ for img_archivo in img_archivos:
         respuestas_bool[:] = False
         if area_grilla*(1+offset_area) > cv2.contourArea(i) > area_grilla*(1-offset_area): 
             #El area del contorno es entre un 10%mayor o menor del area estimada de la hoja
-            print('area contorno:',cv2.contourArea(i))
+            #print('area contorno:',cv2.contourArea(i))
             peri = cv2.arcLength(i,True)
-            print('Perimetro: ', peri)
+            #print('Perimetro: ', peri)
             approx = cv2.approxPolyDP(i,0.05*peri,True)
             cv2.drawContours(img,[approx],0,0,10)
             try :
@@ -126,13 +133,18 @@ for img_archivo in img_archivos:
                                                  - img_integra[puntero[0]][puntero[1]+area[1]])
             casilla_clara = respuestas_int[:,1:].max()
             casilla_oscura = respuestas_int[:,1:].min()
+            if casilla_oscura > 170000:
+                print('¿examen no completado?')
+                casilla_oscura = 170000
+
             offset_gris = 1.1
             #print('Casilla mas blanca: ', casilla_clara)
             #print('Casilla mas negra: ', casilla_oscura)
-            #Se toma el valor mas osuco y el valor mas claro de una casilla 
-            #y se calcula el punto medio como valor de umbral.
-            #Se evito usar la columna 0 por ya estar pintada en la grilla y solo tomar los valores pintados a mano
-            
+            '''
+            Se toma el valor mas osuco y el valor mas claro de una casilla 
+            y se calcula el punto medio como valor de umbral.
+            Se evito usar la columna 0 por ya estar pintada en la grilla y solo tomar los valores pintados a mano
+            '''
             umbral = (casilla_clara - casilla_oscura)/2 + casilla_oscura*offset_gris
             #print('Umbral calculado: ', umbral)
             
@@ -166,14 +178,14 @@ for img_archivo in img_archivos:
                         'respuestas': respuestas_bool.tolist()                    
                     }
                 print('grilla detectada para examen: ', output['codigo'])
-    n = 1
-    reporte['examen' + str(n)] = output
-    
+                if Debug_level > 2:
+                    cv2.namedWindow('ventana',cv2.WINDOW_NORMAL)
+                    cv2.imshow('ventana',img_draw)
+                    cv2.waitKey(0)
+            else: 
+                print('Grilla incorrecta para examen: ', int(obj.data))
+                
 
-#reporte_json = json.dumps(reporte)
-#print(reporte_json)
 
 #cv2.imwrite('C:\CABO\Serie 1\save.jpg', img_draw)
-cv2.namedWindow('ventana',cv2.WINDOW_NORMAL)
-cv2.imshow('ventana',img_draw)
-cv2.waitKey(0)
+
