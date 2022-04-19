@@ -10,12 +10,22 @@ Debug_level = 0
 import numpy as np
 import cv2
 from pyzbar.pyzbar import decode
-from os import scandir, getcwd
+from os import scandir, getcwd,name
 import argparse
-
-parser = argparse.ArgumentParser(description='Corrector automatico de Examenes')
-parser.add_argument("--ruta", default='C:\CABO\Serie 1', help="Ruta al direcctirio que contiene la imagenes")
-parser.add_argument("--url", default='127.0.0.1/index.php', help="url donde se envia la informacion")
+print(name)
+if name == 'nt':
+    parser = argparse.ArgumentParser(description='Corrector automatico de Examenes')
+    parser.add_argument("--ruta", default='C:\CABO\Serie 1', help="Ruta al direcctirio que contiene la imagenes")
+    parser.add_argument("--url", default='127.0.0.1/index.php', help="url donde se envia la informacion")
+    char_dir = '\\'
+elif name == 'posix':
+    parser = argparse.ArgumentParser(description='Corrector automatico de Examenes')
+    parser.add_argument("--ruta", default='/srv/www/htdocs/Examenes', help="Ruta al direcctirio que contiene la imagenes")
+    parser.add_argument("--url", default='127.0.0.1/index.php', help="url donde se envia la informacion")
+    char_dir = '/'
+else:
+    print('No se conose sistema operativo')
+    quit()
 
 args = parser.parse_args()
 ruta = args.ruta
@@ -37,21 +47,18 @@ def rectify(h):
         ''' this function put vertices of square we got, in clockwise order '''
         h = h.reshape((4,2))
         hnew = np.zeros((4,2),dtype = np.float32)
-
         add = h.sum(1)
         hnew[0] = h[np.argmin(add)]
-        hnew[2] = h[np.argmax(add)]
-        
+        hnew[2] = h[np.argmax(add)]     
         diff = np.diff(h,axis = 1)
         hnew[1] = h[np.argmin(diff)]
         hnew[3] = h[np.argmax(diff)]
-
         return hnew
 
 for img_archivo in img_archivos:
-    img = cv2.imread(ruta + '\\' + img_archivo,cv2.IMREAD_GRAYSCALE)
+    img = cv2.imread(ruta + char_dir + img_archivo,cv2.IMREAD_GRAYSCALE)
     print('Imagen examinada:', img_archivo)
-    #print('tamaño imagen:',img.size)
+    print('tamaño imagen:',img.size)
     output = {
         'examen': img_archivo,
              }
@@ -63,17 +70,15 @@ for img_archivo in img_archivos:
         print('error decodificando codigo de barra')
     if decodedObjects.__len__() == 0: 
         print('No se decto codigo')
-        continue
-    
+        continue    
     for obj in decodedObjects:
         #print('Type : ', obj.type)
         #print('Data : ', obj.data,'\n')
         #print(obj)
-        pass
-    
+        pass    
     materias = 5
     opciones = 4
-    #Dimenciones de la Matris de salida 
+    #Dimenciones de la Matriz de salida 
     respuestas_int = np.zeros(((opciones+1)*materias,52),dtype='int32')
     respuestas_bool = np.zeros(((opciones+1)*materias,52),dtype='int')
     #Pixeles que ocupa una linea de la cuadricula
@@ -84,16 +89,12 @@ for img_archivo in img_archivos:
     contorno = 11
     #Filas X (pixeles de cada casilla + piexeles de cada linea)
     #Columnas X (pixeles de cada casilla + piexeles de cada linea)
-    imagen = respuestas_int.shape*(area+linea)
-    
-    img_gauss = cv2.GaussianBlur(img,(9,9),0)
-    
-    img_thresh = cv2.adaptiveThreshold(img_gauss,255,1,1,11,2)
-    
+    imagen = respuestas_int.shape*(area+linea)  
+    img_gauss = cv2.GaussianBlur(img,(9,9),0)    
+    img_thresh = cv2.adaptiveThreshold(img_gauss,255,1,1,11,2)  
     area_grilla = img.size*materias/17.19
     offset_area = 0.15
-    #print('arrea grilla:',area_grilla)
-    
+    #print('arrea grilla:',area_grilla)  
     #deteccion por contornos
     contours, hierarchy = cv2.findContours(img_thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     for i in contours:
@@ -108,20 +109,15 @@ for img_archivo in img_archivos:
             try :
                 approx=rectify(approx)
             except:
-                print('error en el contorno')
-            
+                print('error en el contorno')           
             pts1 = np.float32([approx[0]+[contorno,contorno],
                                approx[1]+[linea[1]-contorno,contorno],
                                approx[2]+[linea[1]-contorno,linea[0]-contorno],
-                               approx[3]+[contorno,linea[0]-contorno]])
-            
-            pts2 = np.float32([ [0,0],[imagen[1]-1,0],imagen[::-1]-1,[0,imagen[0]-1] ])
-            
+                               approx[3]+[contorno,linea[0]-contorno]])            
+            pts2 = np.float32([ [0,0],[imagen[1]-1,0],imagen[::-1]-1,[0,imagen[0]-1] ])            
             M = cv2.getPerspectiveTransform(pts1,pts2)
-            img_warp = cv2.warpPerspective(img,M,tuple(imagen[::-1]))
-            
-            img_integra = cv2.integral(img_warp)
-            
+            img_warp = cv2.warpPerspective(img,M,tuple(imagen[::-1]))           
+            img_integra = cv2.integral(img_warp)           
             img_draw = np.array(img_warp)
             for fila in range(respuestas_int.shape[0]):
                 for columna in range(respuestas_int.shape[1]): 
@@ -136,7 +132,6 @@ for img_archivo in img_archivos:
             if casilla_oscura > 170000:
                 print('¿examen no completado?')
                 casilla_oscura = 170000
-
             offset_gris = 1.1
             #print('Casilla mas blanca: ', casilla_clara)
             #print('Casilla mas negra: ', casilla_oscura)
@@ -146,8 +141,7 @@ for img_archivo in img_archivos:
             Se evito usar la columna 0 por ya estar pintada en la grilla y solo tomar los valores pintados a mano
             '''
             umbral = (casilla_clara - casilla_oscura)/2 + casilla_oscura*offset_gris
-            #print('Umbral calculado: ', umbral)
-            
+            #print('Umbral calculado: ', umbral)          
             for fila in range(respuestas_int.shape[0]):
                 for columna in range(respuestas_int.shape[1]):
                     puntero = (area+linea)*(fila,columna)
@@ -177,6 +171,7 @@ for img_archivo in img_archivos:
                         'opciones': opciones,
                         'respuestas': respuestas_bool.tolist()                    
                     }
+                cv2.imwrite(ruta + char_dir + 'Corregidos' + char_dir + img_archivo , img_draw)
                 print('grilla detectada para examen: ', output['codigo'])
                 if Debug_level > 2:
                     cv2.namedWindow('ventana',cv2.WINDOW_NORMAL)
@@ -184,8 +179,4 @@ for img_archivo in img_archivos:
                     cv2.waitKey(0)
             else: 
                 print('Grilla incorrecta para examen: ', int(obj.data))
-                
-
-
-#cv2.imwrite('C:\CABO\Serie 1\save.jpg', img_draw)
-
+#
